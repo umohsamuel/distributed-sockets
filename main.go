@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/google/uuid"
 )
 
 func main() {
@@ -16,6 +18,8 @@ func main() {
 		DB:       0,
 	})
 
+	defer client.Close()
+
 	ping, err := client.Ping(context.Background()).Result()
 
 	if err != nil {
@@ -25,9 +29,33 @@ func main() {
 
 	fmt.Println(ping)
 
-	// golang redis set command
+	//how to store more complex data?
 
-	err = client.Set(context.Background(), "name", "Samuel", 0).Err()
+	type Person struct {
+		ID         string
+		Name       string `json:"name"`
+		Age        int    `json:"age"`
+		Occupation string `json:"occupation"`
+	}
+
+	samuelID := uuid.NewString()
+
+	jsonString, err := json.Marshal(Person{
+		ID:         samuelID,
+		Name:       "Samuel",
+		Age:        24,
+		Occupation: "Software Engineer",
+	})
+
+	if err != nil {
+		fmt.Printf("Failed to marshal: %s", err.Error())
+		return
+	}
+
+	samuelKey := fmt.Sprintf("person:%s", samuelID)
+
+	// golang redis set command
+	err = client.Set(context.Background(), samuelKey, jsonString, 0).Err()
 
 	if err != nil {
 		fmt.Printf("Failed to set value in the redis instance %s", err.Error())
@@ -36,7 +64,7 @@ func main() {
 
 	// golang redis get commang
 
-	val, err := client.Get(context.Background(), "name").Result()
+	val, err := client.Get(context.Background(), samuelKey).Result()
 
 	if err != nil {
 		fmt.Printf("Failed to get value from redis: %s", err.Error())
