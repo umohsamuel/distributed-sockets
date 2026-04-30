@@ -24,4 +24,24 @@ func main() {
 	}
 
 	fmt.Println(ping)
+
+	// golang redis set command
+
+	err = client.Set(context.Background(), "name", "Samuel", 0).Err()
+
+	if err != nil {
+		fmt.Printf("Failed to set value in the redis instance %s", err.Error())
+		return
+	}
+
+	// golang redis get commang
+
+	val, err := client.Get(context.Background(), "name").Result()
+
+	if err != nil {
+		fmt.Printf("Failed to get value from redis: %s", err.Error())
+		return
+	}
+
+	fmt.Printf("value retreived from redis: %s\n", val)
 }
