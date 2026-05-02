@@ -14,7 +14,8 @@ var (
 )
 
 func main() {
-	cacheClient := cache.NewCache()
+	cacheClient := cache.NewCache(environmentVariables)
+	defer cacheClient.Close()
 
 	adapterDependencies := adapter.AdapterDependencies{
 		EnvironmentVariables: environmentVariables,

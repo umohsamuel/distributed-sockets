@@ -5,16 +5,16 @@ import (
 	"fmt"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/umohsamuel/distributed-sockets/pkg/env"
 )
 
-func NewCache() *redis.Client {
+func NewCache(environmentVariables *env.EnvironmentVariables) *redis.Client {
+
 	client := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "",
+		Addr:     environmentVariables.Redis.REDIS_ADDR,
+		Password: environmentVariables.Redis.REDIS_PASSWORD,
 		DB:       0,
 	})
-
-	defer client.Close()
 
 	ping, err := client.Ping(context.Background()).Result()
 

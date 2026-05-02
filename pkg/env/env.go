@@ -51,6 +51,11 @@ type GoogleGenerativeAI struct {
 	LiveModel string
 }
 
+type RedisConfig struct {
+	REDIS_ADDR     string
+	REDIS_PASSWORD string
+}
+
 type EnvironmentVariables struct {
 	Port                  string
 	JWTSecret             string
@@ -71,6 +76,7 @@ type EnvironmentVariables struct {
 	SMTP                  *SMTP
 	OAuthProvider         *OAuthProvider
 	Gemini                *GoogleGenerativeAI
+	Redis                 *RedisConfig
 }
 
 func loadEnv() {
@@ -78,7 +84,7 @@ func loadEnv() {
 	err := godotenv.Load(rootPath + `/.env`)
 
 	if err != nil {
-		log.Fatalf("Error loading .env file")
+		log.Println("Warning: .env file not found, using environment variables")
 	}
 }
 
@@ -134,6 +140,11 @@ func LoadEnvironment() *EnvironmentVariables {
 			Model:     getEnvOrError("GEMINI_MODEL"),
 			FastModel: getEnvOrError("GEMINI_FAST_MODEL"),
 			LiveModel: getEnvOrError("GEMINI_LIVE_MODEL"),
+		},
+
+		Redis: &RedisConfig{
+			REDIS_ADDR:     getEnvOrError("REDIS_ADDR"),
+			REDIS_PASSWORD: getEnvOrError("REDIS_PASSWORD"),
 		},
 	}
 }
