@@ -58,5 +58,5 @@ func main() {
 
 	r := api.API(services, environmentVariables)
 	ws.Socket(r.Engine, adapters.CacheImplementation, adapters.QueueImplementation, serverID)
-	r.Engine.Run(":8080")
+	r.Engine.Run(environmentVariables.Port)
 }
