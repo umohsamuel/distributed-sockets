@@ -5,3 +5,4 @@ docker-compose.yml
 README.md
 dist
 *.log
+examples

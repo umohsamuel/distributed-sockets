@@ -56,6 +56,11 @@ type RedisConfig struct {
 	REDIS_PASSWORD string
 }
 
+type RabbitMQConfig struct {
+	RABBITMQ_ADDR     string
+	RABBITMQ_PASSWORD string
+}
+
 type EnvironmentVariables struct {
 	Port                  string
 	JWTSecret             string
@@ -77,6 +82,7 @@ type EnvironmentVariables struct {
 	OAuthProvider         *OAuthProvider
 	Gemini                *GoogleGenerativeAI
 	Redis                 *RedisConfig
+	RabbitMQ              *RabbitMQConfig
 }
 
 func loadEnv() {
@@ -145,6 +151,11 @@ func LoadEnvironment() *EnvironmentVariables {
 		Redis: &RedisConfig{
 			REDIS_ADDR:     getEnvOrError("REDIS_ADDR"),
 			REDIS_PASSWORD: getEnvOrError("REDIS_PASSWORD"),
+		},
+
+		RabbitMQ: &RabbitMQConfig{
+			RABBITMQ_ADDR:     getEnvOrError("RABBITMQ_ADDR"),
+			RABBITMQ_PASSWORD: getEnvOrError("RABBITMQ_PASSWORD"),
 		},
 	}
 }
