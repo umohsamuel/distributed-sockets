@@ -118,3 +118,8 @@ See `.env.example` for the full list. Key variables for the distributed socket f
 | `REDIS_PASSWORD`    | Redis password                             | (required) |
 | `RABBITMQ_ADDR`     | RabbitMQ address                           | (required) |
 | `RABBITMQ_PASSWORD` | RabbitMQ password                          | (required) |
+
+
+## Related Articles
+
+- [**Distributed Sockets**](https://www.umohsg.com/blog/distributed-sockets-b54b91e0-adc1-4333-9190-66e28f7b7b19)
