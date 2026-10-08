@@ -101,14 +101,16 @@ npm run dev
 
 ## Deploying the Demo
 
-**Backend** (a VPS with Docker; ports 80/443 open; DNS A record for your API domain pointing at it):
+**Backend** runs on an EC2 instance behind the host's nginx, deployed by `.github/workflows/deploy.yml` on every push to `chat`. The workflow builds the server image in CI, copies it to the instance, writes `deploy/.env` from the `production` environment's secrets and starts `server-1`, `server-2`, Redis and RabbitMQ with `deploy/compose.yaml`. On the first run it also installs `deploy/nginx.conf` as an nginx site and gets a certificate with certbot. The two servers are exposed at `wss://<API_DOMAIN>/s1/ws` and `wss://<API_DOMAIN>/s2/ws`.
+
+The `production` environment needs secrets `EC2_HOST`, `EC2_SSH_KEY`, `REDIS_PASSWORD`, `RABBITMQ_PASSWORD` and variable `API_DOMAIN` (optionally `EC2_USER`, `RABBITMQ_USER`).
+
+To run the same stack locally (servers on `localhost:9001` and `localhost:9002`):
 
 ```bash
-cp deploy/.env.example deploy/.env   # set API_DOMAIN and passwords
-docker compose -f deploy/compose.yaml --env-file deploy/.env up -d --build
+cp deploy/.env.example deploy/.env
+docker compose -f deploy/compose.yaml up -d --build
 ```
-
-This runs `server-1`, `server-2`, Redis, RabbitMQ and Caddy (automatic HTTPS). The two servers are exposed at `wss://<API_DOMAIN>/s1/ws` and `wss://<API_DOMAIN>/s2/ws`.
 
 **Frontend** (Vercel, Netlify, Cloudflare Pages, etc.): set the root directory to `web`, the build command to `npm run build` and the output directory to `dist`, then set:
 

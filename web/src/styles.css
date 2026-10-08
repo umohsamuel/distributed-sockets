@@ -243,6 +243,22 @@ option {
 .steps li + li {
   border-left: 1px solid var(--line);
 }
+.footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 48px;
+  border-top: 1px solid var(--line);
+  font: 12px var(--mono);
+  color: var(--faint);
+}
+.footer a {
+  color: var(--dim);
+  text-decoration: none;
+}
+.footer a:hover {
+  color: var(--text);
+}
 .step-n {
   font: 12px/1.9 var(--mono);
   color: var(--faint);
@@ -672,6 +688,9 @@ option {
   .steps li + li {
     border-left: 0;
     border-top: 1px solid var(--line);
+  }
+  .footer {
+    padding: 16px;
   }
 
   .chat-grid {

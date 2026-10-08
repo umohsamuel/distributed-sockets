@@ -1,0 +1,111 @@
+name: Deploy
+
+on:
+  push:
+    branches: [chat]
+    paths-ignore:
+      - "web/**"
+      - "**.md"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-ec2
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      APP_DIR: distributed-sockets
+      IMAGE: distributed-sockets-server:latest
+      API_DOMAIN: ${{ vars.API_DOMAIN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Built here rather than on the instance, which is small and shared with other apps.
+      - name: Build image
+        run: docker build -f deploy/Dockerfile -t "$IMAGE" .
+
+      - name: Configure SSH
+        env:
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ vars.EC2_USER || 'ubuntu' }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
+          cat >> ~/.ssh/config <<EOF
+          Host ec2
+            HostName $EC2_HOST
+            User $EC2_USER
+            IdentityFile ~/.ssh/deploy_key
+            ServerAliveInterval 30
+          EOF
+
+      # Installs Docker and clones the repo on first run; afterwards just checks out this commit.
+      - name: Prepare instance
+        run: |
+          ssh ec2 "bash -s -- $GITHUB_REPOSITORY $GITHUB_SHA $APP_DIR" <<'EOF'
+          set -euo pipefail
+          repo="$1"; sha="$2"; dir="$HOME/$3"
+          if ! command -v docker >/dev/null; then
+            curl -fsSL https://get.docker.com | sudo sh
+            sudo usermod -aG docker "$USER"
+          fi
+          if [ ! -d "$dir/.git" ]; then
+            git clone "https://github.com/$repo.git" "$dir"
+          fi
+          cd "$dir"
+          git fetch --depth=1 origin "$sha"
+          git checkout --force --detach FETCH_HEAD
+          EOF
+
+      - name: Upload image
+        run: docker save "$IMAGE" | gzip | ssh ec2 "gunzip | docker load"
+
+      - name: Write deploy/.env
+        env:
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          RABBITMQ_USER: ${{ vars.RABBITMQ_USER || 'demo' }}
+          RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD }}
+        run: |
+          printf 'REDIS_PASSWORD=%s\nRABBITMQ_USER=%s\nRABBITMQ_PASSWORD=%s\n' \
+            "$REDIS_PASSWORD" "$RABBITMQ_USER" "$RABBITMQ_PASSWORD" \
+            | ssh ec2 "umask 077 && cat > ~/$APP_DIR/deploy/.env"
+
+      - name: Start containers
+        run: |
+          ssh ec2 "cd ~/$APP_DIR/deploy && docker compose up -d --no-build --remove-orphans && docker image prune -f"
+
+      # Installs the nginx site and gets a certificate until certbot has taken it over;
+      # after that the site file on the server is left alone.
+      - name: Configure nginx
+        run: |
+          ssh ec2 "bash -s -- $API_DOMAIN $APP_DIR" <<'EOF'
+          set -euo pipefail
+          domain="$1"; dir="$HOME/$2"
+          conf="/etc/nginx/sites-available/$domain"
+          if sudo grep -q "managed by Certbot" "$conf" 2>/dev/null; then
+            exit 0
+          fi
+          sed "s/__API_DOMAIN__/$domain/g" "$dir/deploy/nginx.conf" | sudo tee "$conf" >/dev/null
+          sudo ln -sf "$conf" "/etc/nginx/sites-enabled/$domain"
+          sudo nginx -t
+          sudo systemctl reload nginx
+          sudo certbot --nginx -d "$domain" --non-interactive --agree-tos --redirect
+          EOF
+
+      - name: Smoke test
+        run: |
+          for i in $(seq 1 20); do
+            if curl -fsS "https://$API_DOMAIN/s1/info" && curl -fsS "https://$API_DOMAIN/s2/info"; then
+              exit 0
+            fi
+            sleep 6
+          done
+          echo "Servers did not respond on https://$API_DOMAIN" >&2
+          ssh ec2 "cd ~/$APP_DIR/deploy && docker compose ps && docker compose logs --tail=50"
+          exit 1

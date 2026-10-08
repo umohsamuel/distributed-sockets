@@ -1,6 +1,6 @@
 export type ServerConfig = { id: string; url: string }
 
-const DEFAULT_SERVERS = 'server-1=ws://localhost:8080/ws,server-2=ws://localhost:8081/ws'
+const DEFAULT_SERVERS = 'server-1=ws://localhost:9001/ws,server-2=ws://localhost:9002/ws'
 
 export const SERVERS: ServerConfig[] = (import.meta.env.VITE_SERVERS || DEFAULT_SERVERS)
   .split(',')
@@ -16,3 +16,4 @@ export const GITHUB_URL =
 export const ARTICLE_URL =
   import.meta.env.VITE_ARTICLE_URL ||
   'https://www.umohsg.com/blog/distributed-sockets-b54b91e0-adc1-4333-9190-66e28f7b7b19'
+export const PORTFOLIO_URL = 'https://www.umohsg.com/'

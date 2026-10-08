@@ -1,4 +1,7 @@
+name: distributed-sockets
+
 x-server: &server
+  image: distributed-sockets-server:latest
   build:
     context: ..
     dockerfile: deploy/Dockerfile
@@ -21,15 +24,21 @@ x-server-env: &server-env
   RABBITMQ_USER: ${RABBITMQ_USER}
   RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
 
+# The servers only listen on loopback; the host's nginx (deploy/nginx.conf)
+# terminates TLS and routes /s1/* and /s2/* to them.
 services:
   server-1:
     <<: *server
+    ports:
+      - "127.0.0.1:9001:8080"
     environment:
       <<: *server-env
       SERVER_ID: server-1
 
   server-2:
     <<: *server
+    ports:
+      - "127.0.0.1:9002:8080"
     environment:
       <<: *server-env
       SERVER_ID: server-2
@@ -38,6 +47,7 @@ services:
     image: redis:8-alpine
     restart: unless-stopped
     command: redis-server --requirepass ${REDIS_PASSWORD}
+    mem_limit: 128m
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
@@ -49,6 +59,7 @@ services:
   rabbitmq:
     image: rabbitmq:4-alpine
     restart: unless-stopped
+    mem_limit: 384m
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
@@ -59,26 +70,6 @@ services:
       retries: 5
     networks:
       - demo
-
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      API_DOMAIN: ${API_DOMAIN}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-    depends_on:
-      - server-1
-      - server-2
-    networks:
-      - demo
-
-volumes:
-  caddy_data:
 
 networks:
   demo:

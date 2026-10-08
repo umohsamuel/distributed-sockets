@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ARTICLE_URL, GITHUB_URL, SERVERS } from './config'
+import { ARTICLE_URL, GITHUB_URL, PORTFOLIO_URL, SERVERS } from './config'
 import { Chat } from './Chat'
 import { RouteMap } from './RouteMap'
 
@@ -147,6 +147,18 @@ function Landing({ onStart, onJoin }: { onStart: () => void; onJoin: (room: stri
           <span>Send a message and watch the route it takes between servers.</span>
         </li>
       </ol>
+
+      <footer className="footer">
+        <span>
+          built by{' '}
+          <a href={PORTFOLIO_URL} target="_blank" rel="noreferrer author">
+            Samuel Umoh
+          </a>
+        </span>
+        <a href={PORTFOLIO_URL} target="_blank" rel="noreferrer">
+          umohsg.com ↗
+        </a>
+      </footer>
     </div>
   )
 }
