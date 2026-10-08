@@ -15,6 +15,7 @@ type RedisConfig struct {
 }
 
 type RabbitMQConfig struct {
+	RABBITMQ_USER     string
 	RABBITMQ_ADDR     string
 	RABBITMQ_PASSWORD string
 }
@@ -51,6 +52,7 @@ func LoadEnvironment() *EnvironmentVariables {
 		},
 
 		RabbitMQ: &RabbitMQConfig{
+			RABBITMQ_USER:     getEnv("RABBITMQ_USER", "guest"),
 			RABBITMQ_ADDR:     getEnvOrError("RABBITMQ_ADDR"),
 			RABBITMQ_PASSWORD: getEnvOrError("RABBITMQ_PASSWORD"),
 		},

@@ -85,6 +85,39 @@ The recipient receives:
 { "from": "alice", "to": "bob", "body": "hello" }
 ```
 
+Every frame also says where it came from: messages include `from_server`, `to_server` and `route` (`local` or `rabbitmq`), and the sender gets an `ack` (or an `error` if the recipient is offline). The demo frontend uses these fields.
+
+## Live Demo Frontend (`web/`)
+
+A Vite + React chat for two devices. The person who starts a chat connects to `server-1`. The person who joins (by QR code or link) connects to `server-2`. Each message animates its path through Redis and RabbitMQ, and a wire log shows the raw frames.
+
+```bash
+# run two servers locally (see step 4 above), then:
+cd web
+cp .env.example .env   # VITE_SERVERS lists the server WebSocket URLs
+npm install
+npm run dev
+```
+
+## Deploying the Demo
+
+**Backend** (a VPS with Docker; ports 80/443 open; DNS A record for your API domain pointing at it):
+
+```bash
+cp deploy/.env.example deploy/.env   # set API_DOMAIN and passwords
+docker compose -f deploy/compose.yaml --env-file deploy/.env up -d --build
+```
+
+This runs `server-1`, `server-2`, Redis, RabbitMQ and Caddy (automatic HTTPS). The two servers are exposed at `wss://<API_DOMAIN>/s1/ws` and `wss://<API_DOMAIN>/s2/ws`.
+
+**Frontend** (Vercel, Netlify, Cloudflare Pages, etc.): set the root directory to `web`, the build command to `npm run build` and the output directory to `dist`, then set:
+
+```
+VITE_SERVERS=server-1=wss://<API_DOMAIN>/s1/ws,server-2=wss://<API_DOMAIN>/s2/ws
+```
+
+Point a subdomain (e.g. `sockets.yourdomain.com`) at it.
+
 ## Project Structure
 
 ```
@@ -116,6 +149,7 @@ See `.env.example` for the full list. Key variables for the distributed socket f
 | `SERVER_ID`         | Unique identifier for this server instance | hostname   |
 | `REDIS_ADDR`        | Redis address                              | (required) |
 | `REDIS_PASSWORD`    | Redis password                             | (required) |
+| `RABBITMQ_USER`     | RabbitMQ username                          | `guest`    |
 | `RABBITMQ_ADDR`     | RabbitMQ address                           | (required) |
 | `RABBITMQ_PASSWORD` | RabbitMQ password                          | (required) |
 

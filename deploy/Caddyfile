@@ -1,0 +1,9 @@
+{$API_DOMAIN} {
+	handle_path /s1/* {
+		reverse_proxy server-1:8080
+	}
+	handle_path /s2/* {
+		reverse_proxy server-2:8080
+	}
+	respond "distributed-sockets: try /s1/info or /s2/info" 200
+}

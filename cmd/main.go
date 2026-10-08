@@ -29,7 +29,7 @@ func main() {
 	cacheClient := cache.NewCache(environmentVariables)
 	defer cacheClient.Close()
 
-	queueConn, err := amqp.Dial(fmt.Sprintf("amqp://guest:%s@%s/", environmentVariables.RabbitMQ.RABBITMQ_PASSWORD, environmentVariables.RabbitMQ.RABBITMQ_ADDR))
+	queueConn, err := amqp.Dial(fmt.Sprintf("amqp://%s:%s@%s/", environmentVariables.RabbitMQ.RABBITMQ_USER, environmentVariables.RabbitMQ.RABBITMQ_PASSWORD, environmentVariables.RabbitMQ.RABBITMQ_ADDR))
 	util.FailOnError(err, "Failed to connect to RabbitMQ")
 	defer queueConn.Close()
 

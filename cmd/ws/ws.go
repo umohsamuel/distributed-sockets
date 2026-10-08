@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
@@ -16,6 +17,13 @@ import (
 	"github.com/umohsamuel/distributed-sockets/pkg/response"
 )
 
+const (
+	maxMessageSize = 4096
+
+	RouteLocal    = "local"
+	RouteRabbitMQ = "rabbitmq"
+)
+
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		// origin := r.Header.Get("Origin")
@@ -24,8 +32,19 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-// var clients = make(map[*websocket.Conn]bool)
-var clients = make(map[string]*websocket.Conn)
+// gorilla/websocket allows only one concurrent writer per connection.
+type client struct {
+	conn *websocket.Conn
+	mu   sync.Mutex
+}
+
+func (c *client) send(v any) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.conn.WriteJSON(v)
+}
+
+var clients = make(map[string]*client)
 var mutex = &sync.Mutex{}
 
 var cacheClient cache.Interface
@@ -39,8 +58,26 @@ func Socket(r *gin.Engine, cache cache.Interface, q queue.Interface, sID string)
 
 	r.GET("/ws", wsHandler)
 
+	r.GET("/info", func(ctx *gin.Context) {
+		mutex.Lock()
+		online := len(clients)
+		mutex.Unlock()
+		ctx.JSON(http.StatusOK, gin.H{"server_id": serverID, "local_connections": online})
+	})
+
 	startConsumer()
 
+}
+
+type Event struct {
+	Type     string `json:"type"`
+	ID       string `json:"id,omitempty"`
+	ServerID string `json:"server_id,omitempty"`
+	UserID   string `json:"user_id,omitempty"`
+	To       string `json:"to,omitempty"`
+	ToServer string `json:"to_server,omitempty"`
+	Route    string `json:"route,omitempty"`
+	Error    string `json:"error,omitempty"`
 }
 
 func wsHandler(ctx *gin.Context) {
@@ -58,75 +95,119 @@ func wsHandler(ctx *gin.Context) {
 		log.Println("Error upgrading connection: ", err)
 		return
 	}
+	conn.SetReadLimit(maxMessageSize)
+
+	c := &client{conn: conn}
 
 	mutex.Lock()
-	clients[userID] = conn
+	previous := clients[userID]
+	clients[userID] = c
 	mutex.Unlock()
+
+	if previous != nil {
+		previous.conn.Close()
+	}
 
 	cacheClient.Set(context.Background(), "user:"+userID, []byte(serverID), 0)
 
 	log.Printf("User %s connected on server %s\n", userID, serverID)
 
-	go handleConnection(userID, conn)
+	c.send(Event{Type: "welcome", ServerID: serverID, UserID: userID})
+
+	go handleConnection(userID, c)
 }
 
-func handleConnection(userID string, conn *websocket.Conn) {
+func handleConnection(userID string, c *client) {
 	defer func() {
-		conn.Close()
+		c.conn.Close()
+
 		mutex.Lock()
-		delete(clients, userID)
+		current := clients[userID] == c
+		if current {
+			delete(clients, userID)
+		}
 		mutex.Unlock()
-		cacheClient.Delete(context.Background(), "user:"+userID)
+
+		// The user may have already reconnected on another server.
+		if current {
+			owner, err := cacheClient.Get(context.Background(), "user:"+userID)
+			if err == nil && string(owner) == serverID {
+				cacheClient.Delete(context.Background(), "user:"+userID)
+			}
+		}
 	}()
 
 	for {
-		_, message, err := conn.ReadMessage()
+		_, message, err := c.conn.ReadMessage()
 
 		if err != nil {
 			break
 		}
 
-		handleIncomingMessage(userID, message)
+		handleIncomingMessage(userID, c, message)
 	}
 }
 
 type IncomingMessage struct {
+	ID   string `json:"id,omitempty"`
+	Kind string `json:"kind,omitempty"`
 	To   string `json:"to"`
 	Body string `json:"body"`
 }
 
 type QueueMessage struct {
-	From string `json:"from"`
-	To   string `json:"to"`
-	Body string `json:"body"`
+	Type       string `json:"type"`
+	ID         string `json:"id,omitempty"`
+	Kind       string `json:"kind,omitempty"`
+	From       string `json:"from"`
+	To         string `json:"to"`
+	Body       string `json:"body"`
+	FromServer string `json:"from_server"`
+	ToServer   string `json:"to_server"`
+	Route      string `json:"route"`
+	SentAt     int64  `json:"sent_at"`
 }
 
-func handleIncomingMessage(fromUserID string, raw []byte) {
+func handleIncomingMessage(fromUserID string, sender *client, raw []byte) {
 	var msg IncomingMessage
 	if err := json.Unmarshal(raw, &msg); err != nil {
 		log.Println("Invalid handleIncomingMessage message format:", err)
 		return
 	}
 
+	queueMsg := QueueMessage{
+		Type:       "message",
+		ID:         msg.ID,
+		Kind:       msg.Kind,
+		From:       fromUserID,
+		To:         msg.To,
+		Body:       msg.Body,
+		FromServer: serverID,
+		SentAt:     time.Now().UnixMilli(),
+	}
+
 	mutex.Lock()
-	conn, local := clients[msg.To]
+	target, local := clients[msg.To]
 	mutex.Unlock()
 
 	if local {
-		queueMsg := QueueMessage{From: fromUserID, To: msg.To, Body: msg.Body}
-		body, _ := json.Marshal(queueMsg)
-		conn.WriteMessage(websocket.TextMessage, body)
+		queueMsg.ToServer = serverID
+		queueMsg.Route = RouteLocal
+		target.send(queueMsg)
+		sender.send(Event{Type: "ack", ID: msg.ID, To: msg.To, ToServer: serverID, Route: RouteLocal})
 		return
 	}
 
 	targetServerIDBytes, err := cacheClient.Get(context.Background(), "user:"+msg.To)
 	if err != nil {
 		log.Printf("User %s not found online\n", msg.To)
+		sender.send(Event{Type: "error", ID: msg.ID, To: msg.To, Error: "user offline"})
 		return
 	}
 	targetServerID := string(targetServerIDBytes)
 
-	queueMsg := QueueMessage{From: fromUserID, To: msg.To, Body: msg.Body}
+	queueMsg.ToServer = targetServerID
+	queueMsg.Route = RouteRabbitMQ
 	body, err := json.Marshal(queueMsg)
 	if err != nil {
 		log.Println("Failed to Marshall queueMsg:", err)
@@ -157,7 +238,11 @@ func handleIncomingMessage(fromUserID string, raw []byte) {
 	)
 	if err != nil {
 		log.Println("Failed to emit message:", err)
+		sender.send(Event{Type: "error", ID: msg.ID, To: msg.To, Error: "failed to route message"})
+		return
 	}
+
+	sender.send(Event{Type: "ack", ID: msg.ID, To: msg.To, ToServer: targetServerID, Route: RouteRabbitMQ})
 }
 
 func startConsumer() {
@@ -202,16 +287,17 @@ func startConsumer() {
 			}
 
 			mutex.Lock()
-			conn, exists := clients[msg.To]
+			target, exists := clients[msg.To]
 			mutex.Unlock()
 
 			if exists {
-				err := conn.WriteMessage(websocket.TextMessage, body)
+				err := target.send(msg)
 				mainMsg.Ack(false)
 				return err
 			}
+			// Requeueing would redeliver to this same server indefinitely.
 			log.Printf("User %s not found locally\n", msg.To)
-			mainMsg.Nack(false, true)
+			mainMsg.Nack(false, false)
 			return nil
 		},
 	)
