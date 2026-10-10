@@ -9,6 +9,10 @@
   --faint: #545452;
   --sans: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* content caps at --max wide; rows stay full-bleed so borders and bg span the viewport */
+  --max: 1536px;
+  --edge: max(0px, (100% - var(--max)) / 2);
+  --thread-max: 880px;
 }
 
 * {
@@ -139,7 +143,7 @@ option {
   align-items: center;
   gap: 12px;
   height: 52px;
-  padding: 0 24px;
+  padding: 0 calc(var(--edge) + 24px);
   border-bottom: 1px solid var(--line);
   font: 13px var(--mono);
 }
@@ -184,6 +188,7 @@ option {
   flex: 1;
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  padding: 0 var(--edge);
   border-bottom: 1px solid var(--line);
 }
 .hero-copy {
@@ -229,7 +234,7 @@ option {
 .steps {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 0 var(--edge);
   display: grid;
   grid-template-columns: repeat(3, 1fr);
 }
@@ -247,7 +252,7 @@ option {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  padding: 20px 48px;
+  padding: 20px calc(var(--edge) + 48px);
   border-top: 1px solid var(--line);
   font: 12px var(--mono);
   color: var(--faint);
@@ -429,6 +434,10 @@ option {
   display: grid;
   grid-template-columns: 300px minmax(0, 1fr) 360px;
 }
+/* app layout stays full-bleed; only the thread content gets a readable width */
+.chat .bar {
+  padding: 0 24px;
+}
 
 .rail {
   display: flex;
@@ -501,7 +510,7 @@ option {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  padding: 32px;
+  padding: 32px max(32px, (100% - var(--thread-max)) / 2);
 }
 .empty {
   margin: auto;
@@ -557,7 +566,7 @@ option {
 
 .composer {
   display: flex;
-  padding: 16px 32px calc(16px + env(safe-area-inset-bottom));
+  padding: 16px max(32px, (100% - var(--thread-max)) / 2) calc(16px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--line);
 }
 .composer input {
@@ -697,7 +706,8 @@ option {
 }
 
 @media (max-width: 860px) {
-  .bar {
+  .bar,
+  .chat .bar {
     padding: 0 16px;
   }
 
